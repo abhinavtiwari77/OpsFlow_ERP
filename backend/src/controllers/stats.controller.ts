@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { hasPermission } from "../middleware/auth";
+import { hasPermission } from "../../../shared/permissions";
 
 export async function getDashboardStats(req: Request, res: Response) {
   try {
