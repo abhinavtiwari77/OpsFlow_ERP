@@ -113,7 +113,9 @@ export function Customers() {
               <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
             <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            <button type="submit" className="btn btn-primary" style={{marginTop: 12}}>Save Customer</button>
+            <button type="submit" className="btn btn-primary" style={{marginTop: 12}} disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save Customer"}
+            </button>
           </form>
         </PermissionGuard>
       )}
