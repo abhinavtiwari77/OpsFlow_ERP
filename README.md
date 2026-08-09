@@ -65,7 +65,3 @@ The database comes pre-seeded with enterprise test data. You can log in using an
 - **Conditional UI Rendering:** React `PermissionGuard` component dynamically hides/shows action buttons (Edit, Delete, Stock In/Out) based on role.
 - **Custom Styled UI:** Bypasses heavy CSS frameworks for a purely custom, ultra-lightweight `.css` architecture.
 - **Snapshot Architecture:** Sales Challans utilize snapshot fields for historical accuracy (prices and product names remain accurate even if inventory items are updated later).
-
-## License
-
-MIT License
