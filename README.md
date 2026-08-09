@@ -1,67 +1,158 @@
 # OpsFlow ERP
 
-> **Live Application Deployment:**
-> - 🌐 **Frontend App:** [https://opsflow-erp-frontend.onrender.com](https://opsflow-erp-frontend.onrender.com)
-> - ⚡ **Backend API:** [https://opsflow-erp.onrender.com](https://opsflow-erp.onrender.com)
+> **Live Application Deployment**
+>
+> - 🌐 **Frontend:** https://opsflow-erp-frontend.onrender.com
+> - ⚡ **Backend API:** https://opsflow-erp.onrender.com
+>
+> **CI/CD:** GitHub Actions → Render
 
-OpsFlow ERP is a modern, full-stack Enterprise Resource Planning (ERP) and Customer Relationship Management (CRM) application built for growing businesses. It features a sleek, high-end user interface designed for maximum productivity and ease of use.
+OpsFlow ERP is a modern, full-stack **Mini ERP + CRM Operations Portal** designed for wholesale and distribution businesses.
+
+The application manages customers, products, inventory, stock movements, and sales challans while enforcing strict role-based access control across both the frontend and backend.
+
+The project was built as a full-stack developer case study with a focus on **real-world business workflows, API security, database integrity, responsive UI, and automated CI/CD**.
+
+---
 
 ## Features
 
-- **Split-Screen Authentication:** Modern login system with feature highlights and password visibility toggle.
-- **Strict Role-Based Access Control (RBAC):** Centralized permission system enforcing Admin, Sales, Warehouse, and Accounts access across UI and API.
-- **Beautiful Dashboard:** Clean, card-based analytics with real-time stats and recent activity.
-- **Customer Relationship Management (CRM):** Track leads, wholesale customers, and retail clients.
-- **Inventory Management:** Real-time tracking of products, stock alerts (+In / -Out movements), and warehouse locations.
-- **Sales & Invoicing:** Create, draft, and confirm Sales Challans instantly with pricing snapshots.
-- **Fully Responsive UI:** Carefully crafted styling optimized for desktop and mobile displays.
+### 🔐 Authentication & Authorization
 
-## Tech Stack
+- JWT-based authentication
+- Secure password hashing using Bcrypt
+- Role-Based Access Control (RBAC)
+- Four application roles:
+  - Admin
+  - Sales
+  - Warehouse
+  - Accounts
+- Centralized permission matrix shared between frontend and backend
+- Backend API authorization using granular permission middleware
+- Frontend route and action-level permission guards
 
-- **Frontend:** React, TypeScript, Vite, React Router DOM, Axios
-- **Backend:** Node.js, Express, TypeScript, Prisma ORM
-- **Database:** PostgreSQL hosted on Supabase (Cloud Database)
-- **Security:** JWT Authentication, Bcrypt password hashing, Granular Permission Guards
+### 📊 Dashboard
 
-## Quick Start Guide (Local Development)
+- Total customers
+- Total products
+- Low-stock products
+- Total sales challans
+- Recent sales challans
+- Low-stock product alerts
+- Role-aware dashboard statistics
 
-### 1. Backend Setup
+### 👥 Customer CRM
 
-```bash
-cd backend
-npm install
-npx prisma generate
-npm run seed
-npm run dev
-```
+Each customer supports:
 
-The backend server will run on `http://localhost:4000`.
+- Customer name
+- Mobile number
+- Email
+- Business name
+- GST number
+- Customer type
+  - Retail
+  - Wholesale
+  - Distributor
+- Address
+- Status
+  - Lead
+  - Active
+  - Inactive
+- Follow-up date
+- Notes
 
-### 2. Frontend Setup
+Supported operations:
 
-Open a new terminal window:
+- Add customer
+- Edit customer
+- Search customers
+- View customer details
+- Add follow-up notes
+- Role-based create/edit/delete permissions
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 📦 Product & Inventory Management
 
-The frontend will run on `http://localhost:5173`.
+Each product contains:
 
-## Test Accounts
+- Product name
+- SKU
+- Category
+- Unit price
+- Current stock
+- Minimum stock alert quantity
+- Warehouse/location
 
-The database comes pre-seeded with enterprise test data. You can log in using any of the following accounts:
+Supported operations:
 
-- **Admin:** `admin@opsflow.com` | **Password:** `opsflow2026`
-- **Sales:** `sales@opsflow.com` | **Password:** `opsflow2026`
-- **Warehouse:** `warehouse@opsflow.com` | **Password:** `opsflow2026`
-- **Accounts:** `accounts@opsflow.com` | **Password:** `opsflow2026`
+- Add product
+- Edit product
+- View products
+- Search products
+- Stock-in
+- Stock-out
+- Low-stock alerts
 
-## Architecture Highlights
+### 📋 Stock Movement Tracking
 
-- **Single Source of Truth Authorization:** A centralized `shared/permissions.ts` file defines the role matrix and acts as the sole authority for both UI and API authorization.
-- **Granular API Defense:** Express `requirePermission(resource, action)` middleware locks down REST endpoints against unauthorized access.
-- **Conditional UI Rendering:** React `PermissionGuard` component dynamically hides/shows action buttons (Edit, Delete, Stock In/Out) based on role.
-- **Custom Styled UI:** Bypasses heavy CSS frameworks for a purely custom, ultra-lightweight `.css` architecture.
-- **Snapshot Architecture:** Sales Challans utilize snapshot fields for historical accuracy (prices and product names remain accurate even if inventory items are updated later).
+Every inventory movement records:
+
+- Product
+- Quantity changed
+- Movement type
+  - IN
+  - OUT
+- Reason
+- Created by
+- Timestamp
+
+This provides an audit trail for inventory changes.
+
+### 🧾 Sales Challans
+
+Sales users can:
+
+- Select a customer
+- Add multiple products
+- Specify quantities
+- Automatically generate challan numbers
+- Save challans as drafts
+- Confirm challans
+
+Business rules:
+
+- Draft challans do not affect stock
+- Confirmed challans reduce inventory
+- Stock can never become negative
+- Insufficient stock returns a proper API error
+- Confirmation is performed atomically
+- Product information is stored as a snapshot inside the challan
+
+Supported statuses:
+
+- Draft
+- Confirmed
+- Cancelled
+
+---
+
+# Role-Based Access Control
+
+OpsFlow ERP uses a centralized RBAC system.
+
+| Module | Admin | Sales | Warehouse | Accounts |
+|---|---|---|---|---|
+| Customers | Full | Create / Read / Update | ❌ | Read |
+| Products | Full | Read | Create / Read / Update | Read |
+| Stock Movements | Full | ❌ | Full | ❌ |
+| Sales Challans | Full | Create / Read / Confirm | Read | Read |
+| Dashboard | Full | Role-based | Role-based | Role-based |
+
+Authorization is enforced at **two levels**:
+
+### Backend
+
+REST APIs use:
+
+```ts
+requirePermission(resource, action)
