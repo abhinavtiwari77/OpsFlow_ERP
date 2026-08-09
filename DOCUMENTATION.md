@@ -1,68 +1,160 @@
-# OpsFlow ERP - System Documentation
+# OpsFlow ERP — System Documentation
 
-> **Live Application Deployment:**
-> - 🌐 **Frontend App:** [https://opsflow-erp-frontend.onrender.com](https://opsflow-erp-frontend.onrender.com)
-> - ⚡ **Backend API:** [https://opsflow-erp.onrender.com](https://opsflow-erp.onrender.com)
-
-Welcome to the comprehensive system documentation for **OpsFlow ERP**, a full-stack Enterprise Resource Planning and Customer Relationship Management application.
+> **Live Deployment**
+>
+> | Service | URL |
+> |---|---|
+> | 🌐 Frontend | https://opsflow-erp-frontend.onrender.com |
+> | ⚡ Backend API | https://opsflow-erp.onrender.com |
+> | 🔍 Health Check | https://opsflow-erp.onrender.com/health |
+>
+> **Repository:** https://github.com/abhinavtiwari77/OpsFlow_ERP  
+> **CI/CD:** GitHub Actions → Render (auto-deploys on push to `main`)
 
 ---
 
 ## 1. System Architecture
 
-The application uses a modern decoupled architecture:
+OpsFlow ERP uses a modern decoupled architecture:
 
-- **Frontend (Client):** A Single Page Application (SPA) built with React and TypeScript, powered by Vite for lightning-fast HMR and bundling. It uses React Router for client-side routing.
-- **Backend (API):** A RESTful API built with Node.js and Express, heavily typed with TypeScript.
-- **Database Layer:** Prisma ORM with PostgreSQL hosted on **Supabase**.
-- **Shared Permissions:** A shared TypeScript module (`shared/permissions.ts`) containing the exact permission matrix used by both frontend and backend.
-- **Authentication:** Stateless authentication using JSON Web Tokens (JWT). Passwords are encrypted at rest using `bcryptjs`.
+```
+┌─────────────────────────────┐     HTTPS      ┌──────────────────────────────┐
+│   React SPA (Vite)          │ ─────────────► │  Node.js / Express API       │
+│   TanStack Query cache       │                │  Prisma ORM                  │
+│   React Router v6            │ ◄───────────── │  JWT Auth                    │
+│   Render Static Site         │    JSON REST   │  RBAC Middleware             │
+└─────────────────────────────┘                └──────────────┬───────────────┘
+                                                              │
+                                                      PostgreSQL (Supabase)
+                                                   pgbouncer transaction-mode
+```
+
+| Component | Technology | Hosting |
+|---|---|---|
+| Frontend SPA | React 18 + TypeScript + Vite | Render Static Site |
+| Server state cache | TanStack Query (React Query v5) | — |
+| Backend API | Node.js + Express + TypeScript | Render Web Service |
+| ORM | Prisma | — |
+| Database | PostgreSQL | Supabase (ap-southeast-1) |
+| Auth | JWT + bcryptjs | — |
+| CI/CD | GitHub Actions | GitHub |
+| Shared permissions | TypeScript module (`shared/permissions.ts`) | — |
 
 ---
 
 ## 2. Directory Structure
 
-```text
+```
 opsflow-erp/
 │
-├── shared/                   # Shared TypeScript Module
-│   └── permissions.ts        # Single source of truth for Role Matrix & permissions
+├── .github/
+│   └── workflows/
+│       └── ci-cd.yml               # GitHub Actions CI/CD pipeline
 │
-├── backend/                  # Node.js Express API
+├── shared/
+│   └── permissions.ts              # Single source of truth: roles, resources, actions
+│
+├── backend/
 │   ├── prisma/
-│   │   ├── schema.prisma     # PostgreSQL schema definition
-│   │   └── seed.ts           # Database mock data seeder
-│   ├── src/
-│   │   ├── controllers/      # Request handlers / Business logic
-│   │   ├── lib/              # Prisma client singleton
-│   │   ├── middleware/       # Express middlewares (Auth, Granular RBAC, Error handling)
-│   │   ├── routes/           # Express route definitions
-│   │   ├── utils/            # Helper utilities
-│   │   ├── app.ts            # Express app configuration
-│   │   └── server.ts         # Server entry point
-│   ├── .env                  # Backend environment variables
-│   └── package.json
+│   │   ├── schema.prisma           # PostgreSQL schema definition
+│   │   └── seed.ts                 # Database seeder (default users)
+│   └── src/
+│       ├── controllers/
+│       │   ├── auth.controller.ts
+│       │   ├── customer.controller.ts
+│       │   ├── product.controller.ts
+│       │   ├── challan.controller.ts
+│       │   └── stats.controller.ts  # RBAC-aware dashboard stats
+│       ├── lib/
+│       │   └── prisma.ts            # Shared Prisma client singleton
+│       ├── middleware/
+│       │   ├── auth.ts              # JWT verification + requirePermission
+│       │   └── errorHandler.ts      # Global error handler
+│       ├── routes/                  # Express routers
+│       ├── utils/
+│       │   ├── asyncHandler.ts      # Async error wrapper
+│       │   └── apiError.ts          # Typed HTTP error class
+│       ├── app.ts                   # Express app + CORS + routes + /health
+│       └── server.ts                # Entry: prisma.$connect() → app.listen()
 │
-└── frontend/                 # React SPA
-    ├── src/
-    │   ├── api/              # Axios client and request/response interceptors
-    │   ├── components/       # UI components (Layout, ProtectedRoute, PermissionGuard)
-    │   ├── context/          # React Contexts (AuthContext)
-    │   ├── hooks/            # Custom hooks (usePermission)
-    │   ├── pages/            # Application views (Dashboard, CRM, Inventory, Invoices)
-    │   ├── App.tsx           # React router configuration
-    │   ├── main.tsx          # React DOM entry point
-    │   └── styles.css        # Global custom-styled CSS system
-    ├── .env                  # Frontend environment variables
-    ├── index.html
-    └── package.json
+└── frontend/
+    └── src/
+        ├── api/
+        │   ├── client.ts            # Axios instance + JWT interceptor + 401 redirect
+        │   └── queries.ts           # TanStack Query keys (KEYS) + query functions
+        ├── lib/
+        │   └── queryClient.ts       # QueryClient (staleTime: 30s, gcTime: 5min)
+        ├── components/
+        │   ├── Layout.tsx
+        │   ├── ProtectedRoute.tsx   # Route-level RBAC guard
+        │   └── PermissionGuard.tsx  # Component-level RBAC guard
+        ├── context/
+        │   └── AuthContext.tsx      # user, login(), logout() — reads localStorage
+        ├── hooks/
+        │   └── usePermission.ts     # can(resource, action) helper
+        ├── pages/
+        │   ├── Dashboard.tsx        # useQuery — cached, instant on re-navigation
+        │   ├── Customers.tsx        # useQuery + useMutation
+        │   ├── CustomerDetail.tsx   # useQuery + useMutation (notes)
+        │   ├── Products.tsx         # useQuery + useMutation (stock movements)
+        │   ├── Challans.tsx         # useQuery
+        │   ├── NewChallan.tsx       # useMutation + re-uses cached lists
+        │   └── ChallanDetail.tsx    # useMutation (confirm / cancel)
+        ├── App.tsx                  # QueryClientProvider + BrowserRouter + routes
+        ├── main.tsx                 # React DOM root
+        └── styles.css               # Global CSS
 ```
 
 ---
 
-## 3. Role-Based Access Control (RBAC) Matrix
+## 3. CI/CD Pipeline
 
-Authorization is governed by `shared/permissions.ts`. There are exactly four roles: `admin`, `sales`, `warehouse`, and `accounts`.
+The project uses **GitHub Actions** for automated build validation and deployment.
+
+### Workflow file: `.github/workflows/ci-cd.yml`
+
+**Triggers:**
+
+| Event | Branches |
+|---|---|
+| `push` | `main` |
+| `pull_request` | `main` |
+
+**Pipeline flow:**
+
+```
+Push to main / Pull Request
+        │
+        ├─ Job: Backend CI  (ubuntu-latest)
+        │   ├─ actions/checkout@v4
+        │   ├─ actions/setup-node@v4  (Node 20, npm cache)
+        │   ├─ npm ci
+        │   ├─ npx prisma generate
+        │   └─ npm run build  ──────────────────── must pass ✓
+        │
+        ├─ Job: Frontend CI  (ubuntu-latest)
+        │   ├─ actions/checkout@v4
+        │   ├─ actions/setup-node@v4  (Node 20, npm cache)
+        │   ├─ npm ci
+        │   └─ npm run build  ──────────────────── must pass ✓
+        │
+        └─ Job: Deploy to Render  (only on push to main, needs both CI jobs)
+            └─ curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+```
+
+**Deployment only triggers after both CI jobs pass**, ensuring broken code is never deployed.
+
+**Required GitHub secret:**
+
+| Secret | Description |
+|---|---|
+| `RENDER_DEPLOY_HOOK_URL` | Render webhook URL that triggers a new production build |
+
+---
+
+## 4. Role-Based Access Control (RBAC) Matrix
+
+Authorization is enforced by `shared/permissions.ts` — used by **both** the backend middleware and the frontend guards.
 
 | Resource | Action | Admin | Sales | Warehouse | Accounts |
 |---|---|:---:|:---:|:---:|:---:|
@@ -72,76 +164,238 @@ Authorization is governed by `shared/permissions.ts`. There are exactly four rol
 | `products` | `list` / `read` | ✅ | ✅ | ✅ | ✅ |
 | `products` | `create` / `update` | ✅ | ❌ | ✅ | ❌ |
 | `products` | `delete` | ✅ | ❌ | ❌ | ❌ |
-| `stockMovements` | `create` (+In / -Out) | ✅ | ❌ | ✅ | ❌ |
+| `stockMovements` | `create` (stock in/out) | ✅ | ❌ | ✅ | ❌ |
+| `stockMovements` | `list` / `read` | ✅ | ❌ | ✅ | ❌ |
 | `salesChallans` | `list` / `read` | ✅ | ✅ | ✅ | ✅ |
 | `salesChallans` | `create` | ✅ | ✅ | ❌ | ❌ |
 | `salesChallans` | `confirm` | ✅ | ✅ | ❌ | ❌ |
 | `salesChallans` | `cancel` | ✅ | ❌ | ❌ | ❌ |
 
----
+**Dashboard metric visibility per role:**
 
-## 4. Database Schema
+| Metric | Admin | Sales | Warehouse | Accounts |
+|---|:---:|:---:|:---:|:---:|
+| Customers count | ✅ | ✅ | N/A | ✅ |
+| Products count | ✅ | ✅ | ✅ | ✅ |
+| Low Stock count | ✅ | ✅ | ✅ | ✅ |
+| Challans count | ✅ | ✅ | ✅ | ✅ |
 
-The database utilizes relational data modeling with PostgreSQL:
-
-* **User**: Staff accounts (`email`, `passwordHash`, `role`).
-* **Customer**: CRM entity (`name`, `mobile`, `email`, `businessName`, `customerType`, `address`, `status`).
-* **Product**: Inventory entity (`name`, `sku`, `category`, `unitPrice`, `currentStock`, `minStockAlert`, `location`).
-* **StockMovement**: Audit trail of inventory changes (+In / -Out).
-* **SalesChallan**: Invoice/Challan entity linking a `Customer` to multiple line items.
-* **ChallanItem**: Line items using **Snapshot Fields** (`unitPriceSnapshot`, `productNameSnapshot`, `productSkuSnapshot`) to freeze price and product data at creation time for financial accuracy.
+> **N/A** on the Dashboard means the role has no permission for that resource — it is not an error or loading state.
 
 ---
 
 ## 5. API Endpoints Reference
 
+**Base URL:** `https://opsflow-erp.onrender.com`
+
+All endpoints except `/health` and `/auth/*` require `Authorization: Bearer <JWT>`.
+
+### Health
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| `GET` | `/health` | Checks server and DB connection | None |
+
+Response: `{ "status": "ok", "database": "connected" }`  
+Returns `503` if the database is unreachable.
+
 ### Authentication
-* `POST /auth/login` - Authenticate user & get JWT.
-* `GET /auth/me` - Get current user profile.
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/auth/login` | Login — returns `{ token, user }` |
+| `GET` | `/auth/me` | Get current authenticated user |
 
-### Customers (CRM)
-* `GET /customers` - List customers (`?search=`, `?pageSize=`). Requires `customers:list`.
-* `GET /customers/:id` - Customer details & history. Requires `customers:read`.
-* `POST /customers` - Create customer. Requires `customers:create`.
-* `DELETE /customers/:id` - Delete customer. Requires `customers:delete`.
+### Dashboard
+| Method | Endpoint | Description | Permission |
+|---|---|---|---|
+| `GET` | `/stats` | Role-aware dashboard stats + recent challans + low stock | Any authenticated role |
 
-### Products (Inventory)
-* `GET /products` - List products (`?search=`, `?lowStock=true`). Requires `products:list`.
-* `POST /products` - Create product. Requires `products:create`.
-* `DELETE /products/:id` - Delete product. Requires `products:delete`.
-* `POST /products/:id/stock-movement` - Record +In / -Out stock change. Requires `stockMovements:create`.
+Response shape:
+```json
+{
+  "stats": { "customers": 6, "products": 8, "lowStock": 2, "challans": 14 },
+  "recentChallans": [...],
+  "lowStockProducts": [...]
+}
+```
+Unauthorized metrics return `null` (not 0, not an error).
+
+### Customers
+| Method | Endpoint | Description | Permission |
+|---|---|---|---|
+| `GET` | `/customers` | List customers (`?search=`, `?pageSize=`) | `customers:list` |
+| `GET` | `/customers/:id` | Customer detail + challans + notes | `customers:read` |
+| `POST` | `/customers` | Create customer | `customers:create` |
+| `PUT` | `/customers/:id` | Update customer | `customers:update` |
+| `POST` | `/customers/:id/notes` | Add follow-up note | `customers:update` |
+| `DELETE` | `/customers/:id` | Delete customer (blocked if has challans) | `customers:delete` |
+
+### Products
+| Method | Endpoint | Description | Permission |
+|---|---|---|---|
+| `GET` | `/products` | List products (`?search=`) | `products:list` |
+| `POST` | `/products` | Create product | `products:create` |
+| `DELETE` | `/products/:id` | Delete product | `products:delete` |
+| `POST` | `/products/:id/stock-movement` | Record +In / -Out | `stockMovements:create` |
 
 ### Sales Challans
-* `GET /challans` - List sales challans (`?status=`). Requires `salesChallans:list`.
-* `GET /challans/:id` - View challan & line items. Requires `salesChallans:read`.
-* `POST /challans` - Draft new challan. Requires `salesChallans:create`.
-* `POST /challans/:id/confirm` - Confirm challan. Requires `salesChallans:confirm`.
-* `POST /challans/:id/cancel` - Cancel challan. Requires `salesChallans:cancel`.
+| Method | Endpoint | Description | Permission |
+|---|---|---|---|
+| `GET` | `/challans` | List challans (`?status=`) | `salesChallans:list` |
+| `GET` | `/challans/:id` | Challan detail + line items | `salesChallans:read` |
+| `POST` | `/challans` | Create challan (DRAFT or CONFIRMED) | `salesChallans:create` |
+| `POST` | `/challans/:id/confirm` | Confirm — atomically reduces stock | `salesChallans:confirm` |
+| `POST` | `/challans/:id/cancel` | Cancel — restores stock if was confirmed | `salesChallans:cancel` |
 
 ---
 
-## 6. Environment Variables
+## 6. Frontend Data Fetching Architecture
 
-### Backend (`backend/.env`)
+The frontend uses **TanStack Query** for server-state caching and synchronization.
+
+### Query Client Configuration (`src/lib/queryClient.ts`)
+
+| Option | Value | Effect |
+|---|---|---|
+| `staleTime` | 30 seconds | No refetch on re-navigation within 30s |
+| `gcTime` | 5 minutes | Cache retained 5 minutes after last use |
+| `retry` | 1 | One automatic retry on failure |
+| `refetchOnWindowFocus` | `false` | No refetch on tab focus |
+
+### Query Keys (`src/api/queries.ts` — `KEYS`)
+
+| Key | Invalidated by |
+|---|---|
+| `["dashboard", "stats"]` | Any create/update/delete/confirm/cancel mutation |
+| `["customers"]` | Customer create / delete |
+| `["customers", id]` | Add note to customer |
+| `["products"]` | Product create / delete / stock movement |
+| `["challans"]` | Challan create / confirm / cancel |
+| `["challans", id]` | Challan confirm / cancel |
+| `["stockMovements"]` | Stock movement create / challan confirm / cancel |
+
+### Navigation behavior
+
+```
+First visit to Dashboard:
+  GET /stats → 200 → data cached
+
+Navigate: Dashboard → Customers → Dashboard (within 30s):
+  No GET /stats — React Query serves cached data immediately ✓
+
+Navigate: Dashboard → Customers → Dashboard (after 30s):
+  Stale cache displayed instantly
+  GET /stats fires in background ("Refreshing…" indicator)
+  Data updates silently ✓
+
+Mutation (e.g., create customer):
+  POST /customers → success
+  → invalidate ["customers", *] → customer list refetches
+  → invalidate ["dashboard", "stats"] → counts update ✓
+```
+
+---
+
+## 7. Database Schema
+
+PostgreSQL managed by Prisma. Key models:
+
+| Model | Key Fields |
+|---|---|
+| `User` | `id`, `name`, `email`, `passwordHash`, `role` |
+| `Customer` | `id`, `name`, `mobile`, `email`, `businessName`, `gstNumber`, `customerType`, `address`, `status`, `createdById` |
+| `Product` | `id`, `name`, `sku`, `category`, `unitPrice`, `currentStock`, `minStockAlert`, `location` |
+| `StockMovement` | `id`, `productId`, `quantity`, `movementType (IN/OUT)`, `reason`, `createdById` |
+| `SalesChallan` | `id`, `challanNumber`, `customerId`, `status (DRAFT/CONFIRMED/CANCELLED)`, `totalQuantity`, `createdById` |
+| `ChallanItem` | `id`, `challanId`, `productId`, `quantity`, `unitPriceSnapshot`, `productNameSnapshot`, `productSkuSnapshot` |
+| `FollowUpNote` | `id`, `customerId`, `note`, `createdById` |
+
+**Design decisions:**
+- `ChallanItem` stores **price and product name snapshots** — challan records remain accurate even if a product is later edited or deleted
+- `currentStock` can never go below 0 — validated atomically in `POST /challans/:id/confirm`
+- `connection_limit=1` in `DATABASE_URL` — compatible with Supabase free-tier pgbouncer transaction-mode pooler
+
+---
+
+## 8. Environment Variables
+
+### Backend (`backend/.env` / Render environment)
+
 ```env
+# Supabase transaction-mode pooler (use for all runtime queries)
 DATABASE_URL="postgresql://user:pass@host:6543/postgres?pgbouncer=true&connection_limit=1"
+
+# Supabase direct connection (used by prisma migrate/seed only)
 DIRECT_URL="postgresql://user:pass@host:5432/postgres"
-JWT_SECRET="your-secure-jwt-secret"
+
+JWT_SECRET="your-long-random-secret"
 JWT_EXPIRES_IN="8h"
+
 PORT=4000
+NODE_ENV=production
+
+# Comma-separated list of allowed frontend origins
 CORS_ORIGIN="https://opsflow-erp-frontend.onrender.com"
 ```
 
-### Frontend (`frontend/.env`)
+### Frontend (`frontend/.env` / Render build env)
+
 ```env
 VITE_API_URL="https://opsflow-erp.onrender.com"
 ```
 
 ---
 
-## 7. Security & Architecture Highlights
+## 9. Local Development Setup
 
-* **Granular Permission Middleware:** Backend endpoints pass through `requirePermission(resource, action)`, returning HTTP `403 Forbidden` if unauthorized.
-* **Component-Level UI Protection:** Frontend components use `<PermissionGuard resource="..." action="...">` to conditionally hide buttons for unauthorized roles.
-* **Global Error Handling:** All backend async handlers catch crashes safely via `ApiError` without leaking database tracebacks.
-* **JWT Request Interceptor:** Frontend automatically attaches Bearer tokens and redirects to `/login` upon HTTP `401 Unauthorized` token expiry.
+### Prerequisites
+- Node.js 20+
+- A PostgreSQL database (Supabase free tier works)
+
+### Steps
+
+```bash
+# 1. Clone
+git clone https://github.com/abhinavtiwari77/OpsFlow_ERP.git
+cd OpsFlow_ERP
+
+# 2. Backend
+cd backend
+cp .env.example .env        # fill in DATABASE_URL, JWT_SECRET, CORS_ORIGIN
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed           # creates default admin/sales/warehouse/accounts users
+npm run dev                  # runs on http://localhost:4000
+
+# 3. Frontend (new terminal)
+cd frontend
+cp .env.example .env         # VITE_API_URL=http://localhost:4000
+npm install
+npm run dev                  # runs on http://localhost:5173
+```
+
+### Default seed credentials
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@opsflow.com | opsflow2026 |
+| Sales | sales@opsflow.com | opsflow2026 |
+| Warehouse | warehouse@opsflow.com | opsflow2026 |
+| Accounts | accounts@opsflow.com | opsflow2026 |
+
+---
+
+## 10. Security Highlights
+
+| Concern | Implementation |
+|---|---|
+| Password storage | `bcryptjs` — passwords never stored in plaintext |
+| API authentication | JWT verified on every request via `requireAuth` middleware |
+| Authorization | `requirePermission(resource, action)` returns `403` for unauthorized roles |
+| JWT revocation | Tokens expire after 8h — new login required |
+| CORS | Explicit origin whitelist via `CORS_ORIGIN` env var |
+| Input validation | Zod schema validation on all POST/PUT request bodies |
+| Error exposure | Stack traces logged server-side only, never sent to client |
+| DB connection | Prisma singleton — no per-request client instantiation |
+| Double submission | Frontend `useMutation.isPending` disables submit button during requests |
+| Atomic stock | Challan confirmation uses Prisma transaction — no partial updates |
