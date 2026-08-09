@@ -21,8 +21,13 @@ export function Products() {
   const [movementReason, setMovementReason] = useState("");
 
   async function load() {
-    const { data } = await api.get("/products", { params: { search } });
-    setItems(data.items);
+    setError("");
+    try {
+      const { data } = await api.get("/products", { params: { search } });
+      setItems(data.items);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || "Failed to load products");
+    }
   }
 
   useEffect(() => { load(); }, [search]);

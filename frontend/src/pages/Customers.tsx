@@ -25,8 +25,13 @@ export function Customers() {
   const [error, setError] = useState("");
 
   async function load() {
-    const { data } = await api.get("/customers", { params: { search } });
-    setItems(data.items);
+    setError("");
+    try {
+      const { data } = await api.get("/customers", { params: { search } });
+      setItems(data.items);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || "Failed to load customers");
+    }
   }
 
   useEffect(() => { load(); }, [search]);

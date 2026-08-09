@@ -6,11 +6,17 @@ import { PermissionGuard } from "../components/PermissionGuard";
 export function Challans() {
   const [items, setItems] = useState<any[]>([]);
   const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   async function load() {
-    const { data } = await api.get("/challans", { params: { status: status || undefined } });
-    setItems(data.items);
+    setError("");
+    try {
+      const { data } = await api.get("/challans", { params: { status: status || undefined } });
+      setItems(data.items);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || "Failed to load challans");
+    }
   }
 
   useEffect(() => { load(); }, [status]);
@@ -42,6 +48,8 @@ export function Challans() {
           </PermissionGuard>
         </div>
       </div>
+
+      {error && <div className="error-banner">{error}</div>}
 
       <div className="table-container">
 
