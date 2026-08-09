@@ -1,0 +1,122 @@
+// Prisma schema for Mini ERP + CRM Operations Portal
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String
+  createdAt    DateTime @default(now())
+
+  createdCustomers Customer[]        @relation("CustomerCreatedBy")
+  followUps        FollowUpNote[]
+  stockMovements   StockMovement[]
+  challans         SalesChallan[]
+}
+
+model Customer {
+  id           String         @id @default(uuid())
+  name         String
+  mobile       String
+  email        String?
+  businessName String?
+  gstNumber    String?
+  customerType String
+  address      String?
+  status       String @default("LEAD")
+  followUpDate DateTime?
+  notes        String?
+  createdById  String
+  createdBy    User           @relation("CustomerCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  followUpNotes FollowUpNote[]
+  challans      SalesChallan[]
+
+  @@index([name])
+  @@index([mobile])
+}
+
+model FollowUpNote {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  note       String
+  createdById String
+  createdBy   User    @relation(fields: [createdById], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  name          String
+  sku           String   @unique
+  category      String?
+  unitPrice     Decimal
+  currentStock  Int      @default(0)
+  minStockAlert Int      @default(0)
+  location      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stockMovements StockMovement[]
+  challanItems   ChallanItem[]
+
+  @@index([sku])
+  @@index([name])
+}
+
+model StockMovement {
+  id           String       @id @default(uuid())
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id])
+  quantity     Int
+  movementType String
+  reason       String
+  createdById  String
+  createdBy    User         @relation(fields: [createdById], references: [id])
+  createdAt    DateTime     @default(now())
+}
+
+model SalesChallan {
+  id            String        @id @default(uuid())
+  challanNumber String        @unique
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  totalQuantity Int           @default(0)
+  status        String @default("DRAFT")
+  createdById   String
+  createdBy     User          @relation(fields: [createdById], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  items ChallanItem[]
+}
+
+model ChallanItem {
+  id         String       @id @default(uuid())
+  challanId  String
+  challan    SalesChallan @relation(fields: [challanId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product      @relation(fields: [productId], references: [id])
+
+  // Snapshot fields - captured at time of adding to challan so historical
+  // challans stay accurate even if the product is later edited or renamed.
+  productNameSnapshot String
+  productSkuSnapshot  String
+  unitPriceSnapshot   Decimal
+
+  quantity   Int
+}
