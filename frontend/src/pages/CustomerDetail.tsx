@@ -1,0 +1,72 @@
+import { useEffect, useState, FormEvent } from "react";
+import { useParams, Link } from "react-router-dom";
+import { api } from "../api/client";
+
+export function CustomerDetail() {
+  const { id } = useParams();
+  const [customer, setCustomer] = useState<any>(null);
+  const [note, setNote] = useState("");
+
+  async function load() {
+    const { data } = await api.get(`/customers/${id}`);
+    setCustomer(data);
+  }
+
+  useEffect(() => { load(); }, [id]);
+
+  async function addNote(e: FormEvent) {
+    e.preventDefault();
+    if (!note.trim()) return;
+    await api.post(`/customers/${id}/notes`, { note });
+    setNote("");
+    load();
+  }
+
+  if (!customer) return <p>Loading...</p>;
+
+  return (
+    <div>
+      <Link to="/customers" className="back-link">&larr; Back to customers</Link>
+      <h2>{customer.name}</h2>
+      <div className="detail-grid">
+        <div><strong>Mobile:</strong> {customer.mobile}</div>
+        <div><strong>Email:</strong> {customer.email || "-"}</div>
+        <div><strong>Business:</strong> {customer.businessName || "-"}</div>
+        <div><strong>GST:</strong> {customer.gstNumber || "-"}</div>
+        <div><strong>Type:</strong> {customer.customerType}</div>
+        <div><strong>Status:</strong> {customer.status}</div>
+        <div><strong>Address:</strong> {customer.address || "-"}</div>
+      </div>
+
+      <h3>Sales Challans</h3>
+      <table className="data-table">
+        <thead><tr><th>Challan #</th><th>Status</th><th>Total Qty</th><th>Date</th></tr></thead>
+        <tbody>
+          {customer.challans?.map((c: any) => (
+            <tr key={c.id}>
+              <td><Link to={`/challans/${c.id}`}>{c.challanNumber}</Link></td>
+              <td>{c.status}</td>
+              <td>{c.totalQuantity}</td>
+              <td>{new Date(c.createdAt).toLocaleDateString()}</td>
+            </tr>
+          ))}
+          {(!customer.challans || customer.challans.length === 0) && <tr><td colSpan={4} className="muted">No challans yet</td></tr>}
+        </tbody>
+      </table>
+
+      <h3>Follow-up Notes</h3>
+      <form onSubmit={addNote} className="inline-form">
+        <input placeholder="Add a follow-up note..." value={note} onChange={(e) => setNote(e.target.value)} />
+        <button type="submit" className="btn btn-primary">Add</button>
+      </form>
+      <ul className="note-list">
+        {customer.followUpNotes?.map((n: any) => (
+          <li key={n.id}>
+            <span>{n.note}</span>
+            <span className="muted small"> — {n.createdBy?.name}, {new Date(n.createdAt).toLocaleString()}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
