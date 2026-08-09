@@ -24,6 +24,8 @@ export function Customers() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   async function load() {
     setError("");
     try {
@@ -38,14 +40,19 @@ export function Customers() {
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
+    if (isSubmitting) return; // Prevent double-clicks
+    
     setError("");
+    setIsSubmitting(true);
     try {
       await api.post("/customers", form);
       setForm(emptyForm);
       setShowForm(false);
-      load();
+      await load(); // Single source of truth, fetch from backend after success
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to create customer");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 

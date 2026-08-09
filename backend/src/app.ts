@@ -16,7 +16,16 @@ app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 app.use(morgan("dev"));
 
-app.get("/health", (_req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
+import { prisma } from "./lib/prisma";
+
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", database: "connected", time: new Date().toISOString() });
+  } catch (error) {
+    res.status(503).json({ status: "error", database: "disconnected", time: new Date().toISOString() });
+  }
+});
 
 app.use("/auth", authRoutes);
 app.use("/customers", customerRoutes);
