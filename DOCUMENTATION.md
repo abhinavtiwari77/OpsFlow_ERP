@@ -1,5 +1,9 @@
 # OpsFlow ERP - System Documentation
 
+> **Live Application Deployment:**
+> - 🌐 **Frontend App:** [https://opsflow-erp-frontend.onrender.com](https://opsflow-erp-frontend.onrender.com)
+> - ⚡ **Backend API:** [https://opsflow-erp.onrender.com](https://opsflow-erp.onrender.com)
+
 Welcome to the comprehensive system documentation for **OpsFlow ERP**, a full-stack Enterprise Resource Planning and Customer Relationship Management application.
 
 ---
@@ -10,7 +14,8 @@ The application uses a modern decoupled architecture:
 
 - **Frontend (Client):** A Single Page Application (SPA) built with React and TypeScript, powered by Vite for lightning-fast HMR and bundling. It uses React Router for client-side routing.
 - **Backend (API):** A RESTful API built with Node.js and Express, heavily typed with TypeScript.
-- **Database Layer:** Prisma ORM is used for type-safe database access. The database is configured for SQLite by default to allow zero-config local development, but can be seamlessly migrated to PostgreSQL by changing the provider in `schema.prisma`.
+- **Database Layer:** Prisma ORM with PostgreSQL hosted on **Supabase**.
+- **Shared Permissions:** A shared TypeScript module (`shared/permissions.ts`) containing the exact permission matrix used by both frontend and backend.
 - **Authentication:** Stateless authentication using JSON Web Tokens (JWT). Passwords are encrypted at rest using `bcryptjs`.
 
 ---
@@ -20,17 +25,19 @@ The application uses a modern decoupled architecture:
 ```text
 opsflow-erp/
 │
+├── shared/                   # Shared TypeScript Module
+│   └── permissions.ts        # Single source of truth for Role Matrix & permissions
+│
 ├── backend/                  # Node.js Express API
 │   ├── prisma/
-│   │   ├── schema.prisma     # Database schema definition
-│   │   ├── seed.ts           # Database mock data seeder
-│   │   └── dev.db            # SQLite database file
+│   │   ├── schema.prisma     # PostgreSQL schema definition
+│   │   └── seed.ts           # Database mock data seeder
 │   ├── src/
-│   │   ├── controllers/      # Request handlers/Business logic
-│   │   ├── lib/              # Shared libraries (Prisma client singleton)
-│   │   ├── middleware/       # Express middlewares (Auth, Error handling)
+│   │   ├── controllers/      # Request handlers / Business logic
+│   │   ├── lib/              # Prisma client singleton
+│   │   ├── middleware/       # Express middlewares (Auth, Granular RBAC, Error handling)
 │   │   ├── routes/           # Express route definitions
-│   │   ├── utils/            # Helper functions
+│   │   ├── utils/            # Helper utilities
 │   │   ├── app.ts            # Express app configuration
 │   │   └── server.ts         # Server entry point
 │   ├── .env                  # Backend environment variables
@@ -38,13 +45,14 @@ opsflow-erp/
 │
 └── frontend/                 # React SPA
     ├── src/
-    │   ├── api/              # Axios client and interceptors
-    │   ├── components/       # Shared UI components (Layout, ProtectedRoute)
+    │   ├── api/              # Axios client and request/response interceptors
+    │   ├── components/       # UI components (Layout, ProtectedRoute, PermissionGuard)
     │   ├── context/          # React Contexts (AuthContext)
-    │   ├── pages/            # Application views (Dashboard, CRM, Inventory)
+    │   ├── hooks/            # Custom hooks (usePermission)
+    │   ├── pages/            # Application views (Dashboard, CRM, Inventory, Invoices)
     │   ├── App.tsx           # React router configuration
     │   ├── main.tsx          # React DOM entry point
-    │   └── styles.css        # Global highly-optimized CSS system
+    │   └── styles.css        # Global custom-styled CSS system
     ├── .env                  # Frontend environment variables
     ├── index.html
     └── package.json
@@ -52,77 +60,88 @@ opsflow-erp/
 
 ---
 
-## 3. Database Schema
+## 3. Role-Based Access Control (RBAC) Matrix
 
-The database utilizes relational data modeling.
+Authorization is governed by `shared/permissions.ts`. There are exactly four roles: `admin`, `sales`, `warehouse`, and `accounts`.
 
-* **User**: Represents staff members. Contains `email`, `passwordHash`, and `role` (ADMIN, SALES, WAREHOUSE, ACCOUNTS).
-* **Customer**: CRM entity for wholesale/retail clients. Tracks `businessName`, `customerType`, `mobile`, and `address`.
-* **Product**: Inventory entity. Tracks `sku`, `unitPrice`, `currentStock`, `minStockAlert`, and physical `location`.
-* **StockMovement**: Audit trail of inventory changes (+ In / - Out).
-* **SalesChallan**: Invoice/Challan entity linking a `Customer` to multiple products. 
-* **ChallanItem**: Line items for Challans. *Architecture Note: This uses "Snapshot Fields" (`unitPriceSnapshot`, `productNameSnapshot`) to freeze historical pricing and names at the time the challan is generated, ensuring past invoices remain accurate if a product's price changes later.*
+| Resource | Action | Admin | Sales | Warehouse | Accounts |
+|---|---|:---:|:---:|:---:|:---:|
+| `customers` | `list` / `read` | ✅ | ✅ | ❌ | ✅ |
+| `customers` | `create` / `update` | ✅ | ✅ | ❌ | ❌ |
+| `customers` | `delete` | ✅ | ❌ | ❌ | ❌ |
+| `products` | `list` / `read` | ✅ | ✅ | ✅ | ✅ |
+| `products` | `create` / `update` | ✅ | ❌ | ✅ | ❌ |
+| `products` | `delete` | ✅ | ❌ | ❌ | ❌ |
+| `stockMovements` | `create` (+In / -Out) | ✅ | ❌ | ✅ | ❌ |
+| `salesChallans` | `list` / `read` | ✅ | ✅ | ✅ | ✅ |
+| `salesChallans` | `create` | ✅ | ✅ | ❌ | ❌ |
+| `salesChallans` | `confirm` | ✅ | ✅ | ❌ | ❌ |
+| `salesChallans` | `cancel` | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
-## 4. API Endpoints Reference
+## 4. Database Schema
+
+The database utilizes relational data modeling with PostgreSQL:
+
+* **User**: Staff accounts (`email`, `passwordHash`, `role`).
+* **Customer**: CRM entity (`name`, `mobile`, `email`, `businessName`, `customerType`, `address`, `status`).
+* **Product**: Inventory entity (`name`, `sku`, `category`, `unitPrice`, `currentStock`, `minStockAlert`, `location`).
+* **StockMovement**: Audit trail of inventory changes (+In / -Out).
+* **SalesChallan**: Invoice/Challan entity linking a `Customer` to multiple line items.
+* **ChallanItem**: Line items using **Snapshot Fields** (`unitPriceSnapshot`, `productNameSnapshot`, `productSkuSnapshot`) to freeze price and product data at creation time for financial accuracy.
+
+---
+
+## 5. API Endpoints Reference
 
 ### Authentication
-* `POST /auth/login` - Authenticate a user and receive a JWT.
-* `GET /auth/me` - Retrieve the currently authenticated user's profile.
+* `POST /auth/login` - Authenticate user & get JWT.
+* `GET /auth/me` - Get current user profile.
 
 ### Customers (CRM)
-* `GET /customers` - List customers (supports `?search=` and `?pageSize=`).
-* `GET /customers/:id` - Get customer details, including their challans.
-* `POST /customers` - Create a new customer.
+* `GET /customers` - List customers (`?search=`, `?pageSize=`). Requires `customers:list`.
+* `GET /customers/:id` - Customer details & history. Requires `customers:read`.
+* `POST /customers` - Create customer. Requires `customers:create`.
+* `DELETE /customers/:id` - Delete customer. Requires `customers:delete`.
 
 ### Products (Inventory)
-* `GET /products` - List inventory (supports `?search=`, `?lowStock=true`, and `?pageSize=`).
-* `POST /products` - Add a new product to the inventory.
-* `POST /products/:id/stock-movement` - Record an In/Out stock movement and update `currentStock`.
+* `GET /products` - List products (`?search=`, `?lowStock=true`). Requires `products:list`.
+* `POST /products` - Create product. Requires `products:create`.
+* `DELETE /products/:id` - Delete product. Requires `products:delete`.
+* `POST /products/:id/stock-movement` - Record +In / -Out stock change. Requires `stockMovements:create`.
 
 ### Sales Challans
-* `GET /challans` - List challans (supports `?status=`).
-* `GET /challans/:id` - View a specific challan and its line items.
-* `POST /challans` - Generate a new challan (requires customer ID and array of items/quantities).
+* `GET /challans` - List sales challans (`?status=`). Requires `salesChallans:list`.
+* `GET /challans/:id` - View challan & line items. Requires `salesChallans:read`.
+* `POST /challans` - Draft new challan. Requires `salesChallans:create`.
+* `POST /challans/:id/confirm` - Confirm challan. Requires `salesChallans:confirm`.
+* `POST /challans/:id/cancel` - Cancel challan. Requires `salesChallans:cancel`.
 
 ---
 
-## 5. Environment Variables
+## 6. Environment Variables
 
 ### Backend (`backend/.env`)
 ```env
-# Change this to postgresql:// if switching to PostgreSQL
-DATABASE_URL="file:./dev.db"
-
-# JWT Secret for signing tokens (Use a secure random string in production)
-JWT_SECRET="super-secret-jwt-key"
+DATABASE_URL="postgresql://user:pass@host:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://user:pass@host:5432/postgres"
+JWT_SECRET="your-secure-jwt-secret"
 JWT_EXPIRES_IN="8h"
-
-# Application Port
 PORT=4000
+CORS_ORIGIN="https://opsflow-erp-frontend.onrender.com"
 ```
 
 ### Frontend (`frontend/.env`)
 ```env
-# The URL where the backend API is hosted
-VITE_API_URL="http://localhost:4000"
+VITE_API_URL="https://opsflow-erp.onrender.com"
 ```
 
 ---
 
-## 6. Security Features
+## 7. Security & Architecture Highlights
 
-* **Global Error Handler:** The backend wraps routes in an `asyncHandler` that intercepts errors. Expected errors are thrown via a custom `ApiError` class (returning clean JSON responses), while unexpected crashes are caught gracefully without leaking stack traces.
-* **Axios Interceptors:** The frontend globally attaches the JWT token to every request. A response interceptor automatically detects `401 Unauthorized` responses (like an expired session) and routes the user back to the login screen securely.
-
----
-
-## 7. Deployment Guidelines
-
-1. **Database Migration:** 
-   If moving to production, change the Prisma provider in `schema.prisma` from `sqlite` to `postgresql`, update your `DATABASE_URL`, and run `npx prisma migrate deploy` on your CI/CD pipeline.
-2. **Frontend Build:** 
-   Run `npm run build` in the frontend directory to output static files to `dist/`. These files can be hosted globally on Vercel, Netlify, or an S3 bucket.
-3. **Backend Hosting:**
-   Run `npm run build` (tsc) in the backend to compile TypeScript. Host the output `dist/` directory on any Node.js compatible platform (Render, Railway, Heroku, AWS EC2) using `node dist/server.js`. Ensure you inject the production environment variables securely.
+* **Granular Permission Middleware:** Backend endpoints pass through `requirePermission(resource, action)`, returning HTTP `403 Forbidden` if unauthorized.
+* **Component-Level UI Protection:** Frontend components use `<PermissionGuard resource="..." action="...">` to conditionally hide buttons for unauthorized roles.
+* **Global Error Handling:** All backend async handlers catch crashes safely via `ApiError` without leaking database tracebacks.
+* **JWT Request Interceptor:** Frontend automatically attaches Bearer tokens and redirects to `/login` upon HTTP `401 Unauthorized` token expiry.

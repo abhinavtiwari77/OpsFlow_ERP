@@ -1,24 +1,29 @@
 # OpsFlow ERP
 
+> **Live Application Deployment:**
+> - 🌐 **Frontend App:** [https://opsflow-erp-frontend.onrender.com](https://opsflow-erp-frontend.onrender.com)
+> - ⚡ **Backend API:** [https://opsflow-erp.onrender.com](https://opsflow-erp.onrender.com)
+
 OpsFlow ERP is a modern, full-stack Enterprise Resource Planning (ERP) and Customer Relationship Management (CRM) application built for growing businesses. It features a sleek, high-end user interface designed for maximum productivity and ease of use.
 
 ## Features
 
-- **Split-Screen Authentication:** Modern login system with feature highlights.
-- **Beautiful Dashboard:** Clean, card-based analytics with recent activity tables.
-- **Customer Relationship Management (CRM):** Track leads, wholesale customers, and retail clients in a powerful list view.
-- **Inventory Management:** Real-time tracking of products, stock alerts, and multi-warehouse locations.
-- **Sales & Invoicing:** Create, draft, and confirm Sales Challans instantly.
+- **Split-Screen Authentication:** Modern login system with feature highlights and password visibility toggle.
+- **Strict Role-Based Access Control (RBAC):** Centralized permission system enforcing Admin, Sales, Warehouse, and Accounts access across UI and API.
+- **Beautiful Dashboard:** Clean, card-based analytics with real-time stats and recent activity.
+- **Customer Relationship Management (CRM):** Track leads, wholesale customers, and retail clients.
+- **Inventory Management:** Real-time tracking of products, stock alerts (+In / -Out movements), and warehouse locations.
+- **Sales & Invoicing:** Create, draft, and confirm Sales Challans instantly with pricing snapshots.
 - **Fully Responsive UI:** Carefully crafted styling optimized for desktop and mobile displays.
 
 ## Tech Stack
 
 - **Frontend:** React, TypeScript, Vite, React Router DOM, Axios
 - **Backend:** Node.js, Express, TypeScript, Prisma ORM
-- **Database:** SQLite (local-ready out of the box, easily configurable to PostgreSQL)
-- **Security:** JWT Authentication, Bcrypt password hashing
+- **Database:** PostgreSQL hosted on Supabase (Cloud Database)
+- **Security:** JWT Authentication, Bcrypt password hashing, Granular Permission Guards
 
-## Quick Start Guide
+## Quick Start Guide (Local Development)
 
 ### 1. Backend Setup
 
@@ -26,7 +31,6 @@ OpsFlow ERP is a modern, full-stack Enterprise Resource Planning (ERP) and Custo
 cd backend
 npm install
 npx prisma generate
-npx prisma db push
 npm run seed
 npm run dev
 ```
@@ -43,25 +47,23 @@ npm install
 npm run dev
 ```
 
-The frontend will run on `http://localhost:5174` (or port 5173).
+The frontend will run on `http://localhost:5173`.
 
 ## Test Accounts
 
 The database comes pre-seeded with enterprise test data. You can log in using any of the following accounts:
 
-- **Email:** `admin@opsflow.com` | **Password:** `opsflow2026`
-- **Email:** `sales@opsflow.com` | **Password:** `opsflow2026`
-- **Email:** `warehouse@opsflow.com` | **Password:** `opsflow2026`
-- **Email:** `accounts@opsflow.com` | **Password:** `opsflow2026`
+- **Admin:** `admin@opsflow.com` | **Password:** `opsflow2026`
+- **Sales:** `sales@opsflow.com` | **Password:** `opsflow2026`
+- **Warehouse:** `warehouse@opsflow.com` | **Password:** `opsflow2026`
+- **Accounts:** `accounts@opsflow.com` | **Password:** `opsflow2026`
 
 ## Architecture Highlights
 
+- **Single Source of Truth Authorization:** A centralized `shared/permissions.ts` file defines the role matrix and acts as the sole authority for both UI and API authorization.
+- **Granular API Defense:** Express `requirePermission(resource, action)` middleware locks down REST endpoints against unauthorized access.
+- **Conditional UI Rendering:** React `PermissionGuard` component dynamically hides/shows action buttons (Edit, Delete, Stock In/Out) based on role.
 - **Custom Styled UI:** Bypasses heavy CSS frameworks for a purely custom, ultra-lightweight `.css` architecture.
-- **Strict Role-Based Access Control (RBAC):** A centralized `shared/permissions.ts` file acts as the single source of truth for authorization.
-  - Granular `resource:action` mapping completely locks down Express API endpoints.
-  - `PermissionGuard` strictly conditionally renders UI action buttons (e.g. protecting Edit/Delete buttons).
-  - Protected API routes intercept unauthorized REST requests preventing backdoor manipulation.
-- **JWT Interceptor:** Smart Axios interceptors automatically handle token attachment and session timeouts.
 - **Snapshot Architecture:** Sales Challans utilize snapshot fields for historical accuracy (prices and product names remain accurate even if inventory items are updated later).
 
 ## License
