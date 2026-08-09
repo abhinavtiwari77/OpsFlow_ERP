@@ -8,54 +8,19 @@ export function Dashboard() {
   const [stats, setStats] = useState<{ customers?: number; products?: number; lowStock?: number; challans?: number }>({});
   const [recentChallans, setRecentChallans] = useState<any[] | null>(null);
   const [lowStockProducts, setLowStockProducts] = useState<any[] | null>(null);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     async function load() {
-      const tasks = [];
-      const keys: string[] = [];
-      
-      if (can("customers", "list")) {
-        tasks.push(api.get("/customers?pageSize=1"));
-        keys.push("customers");
-      }
-      
-      if (can("products", "list")) {
-        tasks.push(api.get("/products?pageSize=1"));
-        keys.push("products");
-        
-        tasks.push(api.get("/products?lowStock=true&pageSize=5"));
-        keys.push("lowStock");
-      }
-      
-      if (can("salesChallans", "list")) {
-        tasks.push(api.get("/challans?pageSize=1"));
-        keys.push("challans");
-        
-        tasks.push(api.get("/challans?pageSize=5"));
-        keys.push("recentChallans");
-      }
-      
-      if (tasks.length === 0) return;
-
+      setError("");
       try {
-        const results = await Promise.all(tasks);
-        const newStats: any = {};
-        
-        results.forEach((res, index) => {
-          const key = keys[index];
-          if (key === "customers") newStats.customers = res.data.pagination.total;
-          if (key === "products") newStats.products = res.data.pagination.total;
-          if (key === "lowStock") {
-            newStats.lowStock = res.data.pagination?.total || res.data.items.length;
-            setLowStockProducts(res.data.items || []);
-          }
-          if (key === "challans") newStats.challans = res.data.pagination.total;
-          if (key === "recentChallans") setRecentChallans(res.data.items || []);
-        });
-        
-        setStats(newStats);
-      } catch (err) {
-        console.error("Dashboard failed to load one or more protected resources", err);
+        const { data } = await api.get("/stats");
+        setStats(data.stats);
+        setRecentChallans(data.recentChallans);
+        setLowStockProducts(data.lowStockProducts);
+      } catch (err: any) {
+        console.error("Dashboard failed to load stats", err);
+        setError(err.response?.data?.error || err.message || "Failed to load dashboard data");
       }
     }
     load();
@@ -63,6 +28,7 @@ export function Dashboard() {
 
   return (
     <div>
+      {error && <div className="error-message">{error}</div>}
       <div className="stat-grid">
         <div className="stat-card blue">
           <div className="stat-label">Customers</div>

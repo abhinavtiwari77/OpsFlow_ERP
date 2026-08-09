@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.routes";
 import customerRoutes from "./routes/customer.routes";
 import productRoutes from "./routes/product.routes";
 import challanRoutes from "./routes/challan.routes";
+import statsRoutes from "./routes/stats.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 export const app = express();
@@ -21,6 +22,7 @@ app.use("/auth", authRoutes);
 app.use("/customers", customerRoutes);
 app.use("/products", productRoutes);
 app.use("/challans", challanRoutes);
+app.use("/stats", statsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
