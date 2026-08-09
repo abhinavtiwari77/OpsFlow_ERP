@@ -1,29 +1,38 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useState, FormEvent } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { queryClient } from "../lib/queryClient";
+import { fetchCustomerDetail, KEYS } from "../api/queries";
 import { PermissionGuard } from "../components/PermissionGuard";
 
 export function CustomerDetail() {
-  const { id } = useParams();
-  const [customer, setCustomer] = useState<any>(null);
+  const { id } = useParams<{ id: string }>();
   const [note, setNote] = useState("");
 
-  async function load() {
-    const { data } = await api.get(`/customers/${id}`);
-    setCustomer(data);
-  }
+  const { data: customer, isLoading, isError, error } = useQuery({
+    queryKey: KEYS.customerDetail(id!),
+    queryFn: () => fetchCustomerDetail(id!),
+    enabled: !!id,
+  });
 
-  useEffect(() => { load(); }, [id]);
+  const addNoteMutation = useMutation({
+    mutationFn: (noteText: string) => api.post(`/customers/${id}/notes`, { note: noteText }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.customerDetail(id!) });
+      setNote("");
+    },
+  });
 
-  async function addNote(e: FormEvent) {
+  function handleAddNote(e: FormEvent) {
     e.preventDefault();
-    if (!note.trim()) return;
-    await api.post(`/customers/${id}/notes`, { note });
-    setNote("");
-    load();
+    if (!note.trim() || addNoteMutation.isPending) return;
+    addNoteMutation.mutate(note);
   }
 
-  if (!customer) return <p>Loading...</p>;
+  if (isLoading) return <p>Loading…</p>;
+  if (isError) return <p className="error-banner">{(error as any)?.response?.data?.error || "Failed to load customer"}</p>;
+  if (!customer) return null;
 
   return (
     <div>
@@ -51,16 +60,23 @@ export function CustomerDetail() {
               <td>{new Date(c.createdAt).toLocaleDateString()}</td>
             </tr>
           ))}
-          {(!customer.challans || customer.challans.length === 0) && <tr><td colSpan={4} className="muted">No challans yet</td></tr>}
+          {(!customer.challans || customer.challans.length === 0) && (
+            <tr><td colSpan={4} className="muted">No challans yet</td></tr>
+          )}
         </tbody>
       </table>
 
       <h3>Follow-up Notes</h3>
-      <h3>Follow-up Notes</h3>
       <PermissionGuard resource="customers" action="update">
-        <form onSubmit={addNote} className="inline-form">
-          <input placeholder="Add a follow-up note..." value={note} onChange={(e) => setNote(e.target.value)} />
-          <button type="submit" className="btn btn-primary">Add</button>
+        <form onSubmit={handleAddNote} className="inline-form">
+          <input
+            placeholder="Add a follow-up note..."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary" disabled={addNoteMutation.isPending}>
+            {addNoteMutation.isPending ? "Adding…" : "Add"}
+          </button>
         </form>
       </PermissionGuard>
       <ul className="note-list">

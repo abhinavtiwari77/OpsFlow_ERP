@@ -1,42 +1,52 @@
-import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
+import { queryClient } from "../lib/queryClient";
+import { fetchChallanDetail, KEYS } from "../api/queries";
 import { usePermission } from "../hooks/usePermission";
 
 export function ChallanDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const { can } = usePermission();
-  const [challan, setChallan] = useState<any>(null);
-  const [error, setError] = useState("");
 
-  async function load() {
-    const { data } = await api.get(`/challans/${id}`);
-    setChallan(data);
-  }
+  const { data: challan, isLoading, isError, error } = useQuery({
+    queryKey: KEYS.challanDetail(id!),
+    queryFn: () => fetchChallanDetail(id!),
+    enabled: !!id,
+  });
 
-  useEffect(() => { load(); }, [id]);
+  // Confirm mutation — invalidates challans, products (stock), dashboard
+  const confirmMutation = useMutation({
+    mutationFn: () => api.post(`/challans/${id}/confirm`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.challanDetail(id!) });
+      queryClient.invalidateQueries({ queryKey: KEYS.challans });
+      queryClient.invalidateQueries({ queryKey: KEYS.products });
+      queryClient.invalidateQueries({ queryKey: KEYS.stockMovements });
+      queryClient.invalidateQueries({ queryKey: KEYS.dashboardStats });
+    },
+  });
 
-  async function confirm() {
-    setError("");
-    try {
-      await api.post(`/challans/${id}/confirm`);
-      load();
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to confirm challan");
-    }
-  }
+  // Cancel mutation — invalidates same set
+  const cancelMutation = useMutation({
+    mutationFn: () => api.post(`/challans/${id}/cancel`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.challanDetail(id!) });
+      queryClient.invalidateQueries({ queryKey: KEYS.challans });
+      queryClient.invalidateQueries({ queryKey: KEYS.products });
+      queryClient.invalidateQueries({ queryKey: KEYS.stockMovements });
+      queryClient.invalidateQueries({ queryKey: KEYS.dashboardStats });
+    },
+  });
 
-  async function cancel() {
-    setError("");
-    try {
-      await api.post(`/challans/${id}/cancel`);
-      load();
-    } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to cancel challan");
-    }
-  }
+  const mutationError =
+    (confirmMutation.error as any)?.response?.data?.error ||
+    (cancelMutation.error as any)?.response?.data?.error ||
+    "";
 
-  if (!challan) return <p>Loading...</p>;
+  if (isLoading) return <p>Loading…</p>;
+  if (isError) return <p className="error-banner">{(error as any)?.response?.data?.error || "Failed to load challan"}</p>;
+  if (!challan) return null;
 
   const canConfirm = can("salesChallans", "confirm");
   const canCancel = can("salesChallans", "cancel");
@@ -48,7 +58,7 @@ export function ChallanDetail() {
         <h2>{challan.challanNumber}</h2>
         <span className={`badge badge-${challan.status.toLowerCase()}`}>{challan.status}</span>
       </div>
-      {error && <div className="error-banner">{error}</div>}
+      {mutationError && <div className="error-banner">{mutationError}</div>}
 
       <div className="detail-grid">
         <div><strong>Customer:</strong> {challan.customer?.businessName || challan.customer?.name}</div>
@@ -58,7 +68,9 @@ export function ChallanDetail() {
       </div>
 
       <table className="data-table">
-        <thead><tr><th>Product</th><th>SKU</th><th>Unit Price</th><th>Qty</th><th>Line Total</th></tr></thead>
+        <thead>
+          <tr><th>Product</th><th>SKU</th><th>Unit Price</th><th>Qty</th><th>Line Total</th></tr>
+        </thead>
         <tbody>
           {challan.items.map((item: any) => (
             <tr key={item.id}>
@@ -73,14 +85,36 @@ export function ChallanDetail() {
       </table>
 
       {challan.status === "DRAFT" && (canConfirm || canCancel) && (
-        <div className="row-gap" style={{ marginTop: '20px' }}>
-          {canConfirm && <button className="btn btn-primary" onClick={confirm}>Confirm Challan (reduces stock)</button>}
-          {canCancel && <button className="btn btn-ghost" onClick={cancel}>Cancel Challan</button>}
+        <div className="row-gap" style={{ marginTop: "20px" }}>
+          {canConfirm && (
+            <button
+              className="btn btn-primary"
+              onClick={() => confirmMutation.mutate()}
+              disabled={confirmMutation.isPending}
+            >
+              {confirmMutation.isPending ? "Confirming…" : "Confirm Challan (reduces stock)"}
+            </button>
+          )}
+          {canCancel && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending}
+            >
+              Cancel Challan
+            </button>
+          )}
         </div>
       )}
       {canCancel && challan.status === "CONFIRMED" && (
-        <div style={{ marginTop: '20px' }}>
-          <button className="btn btn-ghost" onClick={cancel}>Cancel Challan (restores stock)</button>
+        <div style={{ marginTop: "20px" }}>
+          <button
+            className="btn btn-ghost"
+            onClick={() => cancelMutation.mutate()}
+            disabled={cancelMutation.isPending}
+          >
+            {cancelMutation.isPending ? "Cancelling…" : "Cancel Challan (restores stock)"}
+          </button>
         </div>
       )}
     </div>
