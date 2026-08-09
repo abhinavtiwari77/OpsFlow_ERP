@@ -1,6 +1,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../api/client";
+import { PermissionGuard } from "../components/PermissionGuard";
 
 export function CustomerDetail() {
   const { id } = useParams();
@@ -55,10 +56,13 @@ export function CustomerDetail() {
       </table>
 
       <h3>Follow-up Notes</h3>
-      <form onSubmit={addNote} className="inline-form">
-        <input placeholder="Add a follow-up note..." value={note} onChange={(e) => setNote(e.target.value)} />
-        <button type="submit" className="btn btn-primary">Add</button>
-      </form>
+      <h3>Follow-up Notes</h3>
+      <PermissionGuard resource="customers" action="update">
+        <form onSubmit={addNote} className="inline-form">
+          <input placeholder="Add a follow-up note..." value={note} onChange={(e) => setNote(e.target.value)} />
+          <button type="submit" className="btn btn-primary">Add</button>
+        </form>
+      </PermissionGuard>
       <ul className="note-list">
         {customer.followUpNotes?.map((n: any) => (
           <li key={n.id}>

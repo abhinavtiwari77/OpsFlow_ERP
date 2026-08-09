@@ -112,3 +112,19 @@ export async function addFollowUpNote(req: Request, res: Response) {
 
   res.status(201).json(created);
 }
+
+// DELETE /customers/:id
+export async function deleteCustomer(req: Request, res: Response) {
+  const existing = await prisma.customer.findUnique({
+    where: { id: req.params.id },
+    include: { challans: { take: 1 } }
+  });
+  if (!existing) throw new ApiError(404, "Customer not found");
+
+  if (existing.challans.length > 0) {
+    throw new ApiError(409, "Cannot delete customer because they are referenced by existing sales challans.");
+  }
+
+  await prisma.customer.delete({ where: { id: req.params.id } });
+  res.status(204).send();
+}

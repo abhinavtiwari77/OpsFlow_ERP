@@ -1,6 +1,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { PermissionGuard } from "../components/PermissionGuard";
 
 type Customer = {
   id: string;
@@ -43,6 +44,17 @@ export function Customers() {
     }
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm("Are you sure you want to delete this customer?")) return;
+    setError("");
+    try {
+      await api.delete(`/customers/${id}`);
+      load();
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to delete customer");
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -58,43 +70,49 @@ export function Customers() {
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             Refresh
           </button>
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? "Cancel" : "Add New Client"}
-          </button>
+          <PermissionGuard resource="customers" action="create">
+            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? "Cancel" : "Add New Client"}
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
       {showForm && (
-        <form className="panel-form" onSubmit={handleCreate}>
-          {error && <div className="error-banner">{error}</div>}
-          <div className="form-grid">
-            <input placeholder="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <input placeholder="Mobile" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
-            <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <input placeholder="Business name" value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} />
-            <input placeholder="GST number" value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} />
-            <select value={form.customerType} onChange={(e) => setForm({ ...form, customerType: e.target.value })}>
-              <option value="RETAIL">Retail</option>
-              <option value="WHOLESALE">Wholesale</option>
-              <option value="DISTRIBUTOR">Distributor</option>
-            </select>
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="LEAD">Lead</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-            <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          </div>
-          <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          <button type="submit" className="btn btn-primary" style={{marginTop: 12}}>Save Customer</button>
-        </form>
+        <PermissionGuard resource="customers" action="create">
+          <form className="panel-form" onSubmit={handleCreate}>
+            {error && <div className="error-banner">{error}</div>}
+            <div className="form-grid">
+              <input placeholder="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input placeholder="Mobile" required value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
+              <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <input placeholder="Business name" value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} />
+              <input placeholder="GST number" value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} />
+              <select value={form.customerType} onChange={(e) => setForm({ ...form, customerType: e.target.value })}>
+                <option value="RETAIL">Retail</option>
+                <option value="WHOLESALE">Wholesale</option>
+                <option value="DISTRIBUTOR">Distributor</option>
+              </select>
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                <option value="LEAD">Lead</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+              <input placeholder="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            </div>
+            <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <button type="submit" className="btn btn-primary" style={{marginTop: 12}}>Save Customer</button>
+          </form>
+        </PermissionGuard>
       )}
+
+      {error && !showForm && <div className="error-banner">{error}</div>}
 
       <div className="table-container">
 
       <table className="data-table">
         <thead>
-          <tr><th>Name</th><th>Mobile</th><th>Business</th><th>Type</th><th>Status</th></tr>
+          <tr><th>Name</th><th>Mobile</th><th>Business</th><th>Type</th><th>Status</th><th>Actions</th></tr>
         </thead>
         <tbody>
           {items.map((c) => (
@@ -104,9 +122,14 @@ export function Customers() {
               <td>{c.businessName || "-"}</td>
               <td>{c.customerType}</td>
               <td><span className={`badge badge-${c.status.toLowerCase()}`}>{c.status}</span></td>
+              <td>
+                <PermissionGuard resource="customers" action="delete">
+                  <button className="btn btn-small" style={{background: '#fee2e2', color: '#b91c1c', border: 'none'}} onClick={() => handleDelete(c.id)}>Delete</button>
+                </PermissionGuard>
+              </td>
             </tr>
           ))}
-          {items.length === 0 && <tr><td colSpan={5} className="muted">No customers found</td></tr>}
+          {items.length === 0 && <tr><td colSpan={6} className="muted">No customers found</td></tr>}
         </tbody>
       </table>
       </div>

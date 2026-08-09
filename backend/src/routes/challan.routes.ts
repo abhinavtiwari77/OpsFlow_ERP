@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import {
   createChallan,
   listChallans,
@@ -13,11 +13,10 @@ const router = Router();
 
 router.use(requireAuth);
 
-// Sales and Admin create/confirm challans. Warehouse and Accounts can view.
-router.post("/", requireRole("ADMIN", "SALES"), asyncHandler(createChallan));
-router.get("/", asyncHandler(listChallans));
-router.get("/:id", asyncHandler(getChallan));
-router.post("/:id/confirm", requireRole("ADMIN", "SALES"), asyncHandler(confirmChallan));
-router.post("/:id/cancel", requireRole("ADMIN", "SALES"), asyncHandler(cancelChallan));
+router.post("/", requirePermission("salesChallans", "create"), asyncHandler(createChallan));
+router.get("/", requirePermission("salesChallans", "list"), asyncHandler(listChallans));
+router.get("/:id", requirePermission("salesChallans", "read"), asyncHandler(getChallan));
+router.post("/:id/confirm", requirePermission("salesChallans", "confirm"), asyncHandler(confirmChallan));
+router.post("/:id/cancel", requirePermission("salesChallans", "cancel"), asyncHandler(cancelChallan));
 
 export default router;

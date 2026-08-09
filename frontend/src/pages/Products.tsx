@@ -1,6 +1,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { PermissionGuard } from "../components/PermissionGuard";
 
 type Product = {
   id: string; name: string; sku: string; category?: string;
@@ -54,6 +55,17 @@ export function Products() {
     }
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+    setError("");
+    try {
+      await api.delete(`/products/${id}`);
+      load();
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Failed to delete product");
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -69,27 +81,31 @@ export function Products() {
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             Refresh
           </button>
-          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-            {showForm ? "Cancel" : "Add New Product"}
-          </button>
+          <PermissionGuard resource="products" action="create">
+            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+              {showForm ? "Cancel" : "Add New Product"}
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
       {showForm && (
-        <form className="panel-form" onSubmit={handleCreate}>
-          <div className="form-grid">
-            <input placeholder="Product name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <input placeholder="SKU" required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-            <input placeholder="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
-            <input type="number" placeholder="Unit price" required value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: parseFloat(e.target.value) })} />
-            <input type="number" placeholder="Starting stock" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: parseInt(e.target.value) })} />
-            <input type="number" placeholder="Minimum stock alert" value={form.minStockAlert} onChange={(e) => setForm({ ...form, minStockAlert: parseInt(e.target.value) })} />
-            <input placeholder="Location/Warehouse" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          </div>
-          <button type="submit" className="btn btn-primary" style={{marginTop: 12}}>Save Product</button>
-        </form>
+        <PermissionGuard resource="products" action="create">
+          <form className="panel-form" onSubmit={handleCreate}>
+            <div className="form-grid">
+              <input placeholder="Product name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input placeholder="SKU" required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+              <input placeholder="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              <input type="number" placeholder="Unit price" required value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: parseFloat(e.target.value) })} />
+              <input type="number" placeholder="Starting stock" value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: parseInt(e.target.value) })} />
+              <input type="number" placeholder="Minimum stock alert" value={form.minStockAlert} onChange={(e) => setForm({ ...form, minStockAlert: parseInt(e.target.value) })} />
+              <input placeholder="Location/Warehouse" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            </div>
+            <button type="submit" className="btn btn-primary" style={{marginTop: 12}}>Save Product</button>
+          </form>
+        </PermissionGuard>
       )}
 
       {movement && (
@@ -124,8 +140,13 @@ export function Products() {
               </td>
               <td>{p.location || "-"}</td>
               <td>
-                <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "IN" })}>+ In</button>{" "}
-                <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "OUT" })}>- Out</button>
+                <PermissionGuard resource="stockMovements" action="create">
+                  <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "IN" })}>+ In</button>{" "}
+                  <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "OUT" })}>- Out</button>
+                </PermissionGuard>
+                <PermissionGuard resource="products" action="delete">
+                  <button className="btn btn-small" style={{marginLeft: 8, background: '#fee2e2', color: '#b91c1c', border: 'none'}} onClick={() => handleDelete(p.id)}>Delete</button>
+                </PermissionGuard>
               </td>
             </tr>
           ))}

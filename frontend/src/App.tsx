@@ -25,12 +25,15 @@ export default function App() {
             }
           >
             <Route path="/" element={<Dashboard />} />
-            <Route path="/customers" element={<Customers />} />
-            <Route path="/customers/:id" element={<CustomerDetail />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/challans" element={<Challans />} />
-            <Route path="/challans/new" element={<NewChallan />} />
-            <Route path="/challans/:id" element={<ChallanDetail />} />
+            
+            <Route path="/customers" element={<ProtectedRoute resource="customers" action="list"><Customers /></ProtectedRoute>} />
+            <Route path="/customers/:id" element={<ProtectedRoute resource="customers" action="read"><CustomerDetail /></ProtectedRoute>} />
+            
+            <Route path="/products" element={<ProtectedRoute resource="products" action="list"><Products /></ProtectedRoute>} />
+            
+            <Route path="/challans" element={<ProtectedRoute resource="salesChallans" action="list"><Challans /></ProtectedRoute>} />
+            <Route path="/challans/new" element={<ProtectedRoute resource="salesChallans" action="create"><NewChallan /></ProtectedRoute>} />
+            <Route path="/challans/:id" element={<ProtectedRoute resource="salesChallans" action="read"><ChallanDetail /></ProtectedRoute>} />
           </Route>
         </Routes>
       </AuthProvider>

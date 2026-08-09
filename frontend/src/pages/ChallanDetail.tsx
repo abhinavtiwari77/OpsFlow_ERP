@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
+import { usePermission } from "../hooks/usePermission";
 
 export function ChallanDetail() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { can } = usePermission();
   const [challan, setChallan] = useState<any>(null);
   const [error, setError] = useState("");
 
@@ -38,7 +38,8 @@ export function ChallanDetail() {
 
   if (!challan) return <p>Loading...</p>;
 
-  const canManage = user?.role === "ADMIN" || user?.role === "SALES";
+  const canConfirm = can("salesChallans", "confirm");
+  const canCancel = can("salesChallans", "cancel");
 
   return (
     <div>
@@ -71,14 +72,16 @@ export function ChallanDetail() {
         </tbody>
       </table>
 
-      {canManage && challan.status === "DRAFT" && (
-        <div className="row-gap">
-          <button className="btn btn-primary" onClick={confirm}>Confirm Challan (reduces stock)</button>
-          <button className="btn btn-ghost" onClick={cancel}>Cancel Challan</button>
+      {challan.status === "DRAFT" && (canConfirm || canCancel) && (
+        <div className="row-gap" style={{ marginTop: '20px' }}>
+          {canConfirm && <button className="btn btn-primary" onClick={confirm}>Confirm Challan (reduces stock)</button>}
+          {canCancel && <button className="btn btn-ghost" onClick={cancel}>Cancel Challan</button>}
         </div>
       )}
-      {canManage && challan.status === "CONFIRMED" && (
-        <button className="btn btn-ghost" onClick={cancel}>Cancel Challan (restores stock)</button>
+      {canCancel && challan.status === "CONFIRMED" && (
+        <div style={{ marginTop: '20px' }}>
+          <button className="btn btn-ghost" onClick={cancel}>Cancel Challan (restores stock)</button>
+        </div>
       )}
     </div>
   );

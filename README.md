@@ -57,6 +57,10 @@ The database comes pre-seeded with enterprise test data. You can log in using an
 ## Architecture Highlights
 
 - **Custom Styled UI:** Bypasses heavy CSS frameworks for a purely custom, ultra-lightweight `.css` architecture.
+- **Strict Role-Based Access Control (RBAC):** A centralized `shared/permissions.ts` file acts as the single source of truth for authorization.
+  - Granular `resource:action` mapping completely locks down Express API endpoints.
+  - `PermissionGuard` strictly conditionally renders UI action buttons (e.g. protecting Edit/Delete buttons).
+  - Protected API routes intercept unauthorized REST requests preventing backdoor manipulation.
 - **JWT Interceptor:** Smart Axios interceptors automatically handle token attachment and session timeouts.
 - **Snapshot Architecture:** Sales Challans utilize snapshot fields for historical accuracy (prices and product names remain accurate even if inventory items are updated later).
 

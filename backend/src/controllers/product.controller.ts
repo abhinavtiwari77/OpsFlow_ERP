@@ -119,3 +119,19 @@ export async function recordStockMovement(req: Request, res: Response) {
 
   res.status(201).json({ movement, newStock });
 }
+
+// DELETE /products/:id
+export async function deleteProduct(req: Request, res: Response) {
+  const existing = await prisma.product.findUnique({ 
+    where: { id: req.params.id },
+    include: { challanItems: { take: 1 }, stockMovements: { take: 1 } }
+  });
+  if (!existing) throw new ApiError(404, "Product not found");
+
+  if (existing.challanItems.length > 0 || existing.stockMovements.length > 0) {
+    throw new ApiError(409, "Cannot delete product because it is referenced by existing stock movements or sales challans.");
+  }
+
+  await prisma.product.delete({ where: { id: req.params.id } });
+  res.status(204).send();
+}

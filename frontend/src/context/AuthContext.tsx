@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import { api } from "../api/client";
+import { Role, normalizeRole } from "../../../shared/permissions";
 
-type User = { id: string; name: string; email: string; role: "ADMIN" | "SALES" | "WAREHOUSE" | "ACCOUNTS" };
+type User = { id: string; name: string; email: string; role: Role };
 
 type AuthContextType = {
   user: User | null;
@@ -14,14 +15,28 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem("user");
-    return stored ? JSON.parse(stored) : null;
+    if (!stored) return null;
+    try {
+      const parsed = JSON.parse(stored);
+      const role = normalizeRole(parsed.role);
+      if (!role) return null; // Drop invalid role
+      return { ...parsed, role };
+    } catch {
+      return null;
+    }
   });
 
   async function login(email: string, password: string) {
     const { data } = await api.post("/auth/login", { email, password });
+    const role = normalizeRole(data.user.role);
+    if (!role) {
+      throw new Error("Invalid role received from server.");
+    }
+    
+    const validUser = { ...data.user, role };
     localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    setUser(data.user);
+    localStorage.setItem("user", JSON.stringify(validUser));
+    setUser(validUser);
   }
 
   function logout() {

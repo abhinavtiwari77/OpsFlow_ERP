@@ -1,23 +1,24 @@
 import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import {
   createCustomer,
   listCustomers,
   getCustomer,
   updateCustomer,
   addFollowUpNote,
+  deleteCustomer
 } from "../controllers/customer.controller";
 
 const router = Router();
 
 router.use(requireAuth);
 
-// Admin and Sales manage customers. Everyone authenticated can view.
-router.post("/", requireRole("ADMIN", "SALES"), asyncHandler(createCustomer));
-router.get("/", asyncHandler(listCustomers));
-router.get("/:id", asyncHandler(getCustomer));
-router.put("/:id", requireRole("ADMIN", "SALES"), asyncHandler(updateCustomer));
-router.post("/:id/notes", requireRole("ADMIN", "SALES"), asyncHandler(addFollowUpNote));
+router.post("/", requirePermission("customers", "create"), asyncHandler(createCustomer));
+router.get("/", requirePermission("customers", "list"), asyncHandler(listCustomers));
+router.get("/:id", requirePermission("customers", "read"), asyncHandler(getCustomer));
+router.put("/:id", requirePermission("customers", "update"), asyncHandler(updateCustomer));
+router.delete("/:id", requirePermission("customers", "delete"), asyncHandler(deleteCustomer));
+router.post("/:id/notes", requirePermission("customers", "update"), asyncHandler(addFollowUpNote));
 
 export default router;

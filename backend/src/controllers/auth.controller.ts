@@ -20,15 +20,17 @@ export async function login(req: Request, res: Response) {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) throw new ApiError(401, "Invalid email or password");
 
+  const normalizedRole = user.role.toLowerCase();
+
   const token = jwt.sign(
-    { userId: user.id, role: user.role, email: user.email },
+    { userId: user.id, role: normalizedRole, email: user.email },
     process.env.JWT_SECRET as string,
     { expiresIn: (process.env.JWT_EXPIRES_IN || "8h") as any }
   );
 
   res.json({
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    user: { id: user.id, name: user.name, email: user.email, role: normalizedRole },
   });
 }
 
@@ -39,5 +41,5 @@ export async function me(req: Request, res: Response) {
     select: { id: true, name: true, email: true, role: true, createdAt: true },
   });
   if (!user) throw new ApiError(404, "User not found");
-  res.json(user);
+  res.json({ ...user, role: user.role.toLowerCase() });
 }
