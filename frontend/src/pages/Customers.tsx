@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, useRef, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PermissionGuard } from "../components/PermissionGuard";
@@ -23,32 +23,51 @@ export function Customers() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
-
+  const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function load() {
+  // Abort controller ref to cancel stale in-flight requests
+  const abortRef = useRef<AbortController | null>(null);
+
+  async function load(keepExisting = false) {
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
+    if (!keepExisting) setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/customers", { params: { search } });
+      const { data } = await api.get("/customers", {
+        params: { search },
+        signal: abortRef.current.signal,
+      });
       setItems(data.items);
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") return;
+      // DO NOT clear existing items on error — keep stale data visible
       setError(err.response?.data?.error || err.message || "Failed to load customers");
+    } finally {
+      setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => {
+    load();
+    return () => { abortRef.current?.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
-    if (isSubmitting) return; // Prevent double-clicks
-    
+    if (isSubmitting) return;
+
     setError("");
     setIsSubmitting(true);
     try {
       await api.post("/customers", form);
       setForm(emptyForm);
       setShowForm(false);
-      await load(); // Single source of truth, fetch from backend after success
+      await load(true); // keepExisting=true while refetching
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to create customer");
     } finally {
@@ -61,7 +80,7 @@ export function Customers() {
     setError("");
     try {
       await api.delete(`/customers/${id}`);
-      load();
+      load(true);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to delete customer");
     }
@@ -78,7 +97,7 @@ export function Customers() {
         </div>
         <div className="page-header-actions">
           <input className="search-box" style={{ margin: 0 }} placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={load}>
+          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => load()}>
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             Refresh
           </button>
@@ -122,30 +141,35 @@ export function Customers() {
 
       {error && !showForm && <div className="error-banner">{error}</div>}
 
-      <div className="table-container">
+      {loading && items.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading customers…</div>
+      )}
 
-      <table className="data-table">
-        <thead>
-          <tr><th>Name</th><th>Mobile</th><th>Business</th><th>Type</th><th>Status</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {items.map((c) => (
-            <tr key={c.id}>
-              <td><Link to={`/customers/${c.id}`}>{c.name}</Link></td>
-              <td>{c.mobile}</td>
-              <td>{c.businessName || "-"}</td>
-              <td>{c.customerType}</td>
-              <td><span className={`badge badge-${c.status.toLowerCase()}`}>{c.status}</span></td>
-              <td>
-                <PermissionGuard resource="customers" action="delete">
-                  <button className="btn btn-small" style={{background: '#fee2e2', color: '#b91c1c', border: 'none'}} onClick={() => handleDelete(c.id)}>Delete</button>
-                </PermissionGuard>
-              </td>
-            </tr>
-          ))}
-          {items.length === 0 && <tr><td colSpan={6} className="muted">No customers found</td></tr>}
-        </tbody>
-      </table>
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr><th>Name</th><th>Mobile</th><th>Business</th><th>Type</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {items.map((c) => (
+              <tr key={c.id}>
+                <td><Link to={`/customers/${c.id}`}>{c.name}</Link></td>
+                <td>{c.mobile}</td>
+                <td>{c.businessName || "-"}</td>
+                <td>{c.customerType}</td>
+                <td><span className={`badge badge-${c.status.toLowerCase()}`}>{c.status}</span></td>
+                <td>
+                  <PermissionGuard resource="customers" action="delete">
+                    <button className="btn btn-small" style={{background: '#fee2e2', color: '#b91c1c', border: 'none'}} onClick={() => handleDelete(c.id)}>Delete</button>
+                  </PermissionGuard>
+                </td>
+              </tr>
+            ))}
+            {!loading && items.length === 0 && !error && (
+              <tr><td colSpan={6} className="muted">No customers found</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

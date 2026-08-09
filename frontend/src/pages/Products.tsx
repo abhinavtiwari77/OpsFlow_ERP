@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, useRef, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PermissionGuard } from "../components/PermissionGuard";
@@ -16,21 +16,33 @@ export function Products() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [movement, setMovement] = useState<{ id: string; type: "IN" | "OUT" } | null>(null);
   const [movementQty, setMovementQty] = useState(1);
   const [movementReason, setMovementReason] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
-  async function load() {
+  async function load(keepExisting = false) {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    if (!keepExisting) setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/products", { params: { search } });
+      const { data } = await api.get("/products", { params: { search }, signal: abortRef.current.signal });
       setItems(data.items);
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") return;
       setError(err.response?.data?.error || err.message || "Failed to load products");
+    } finally {
+      setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => {
+    load();
+    return () => { abortRef.current?.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -39,7 +51,7 @@ export function Products() {
       await api.post("/products", form);
       setForm(emptyForm);
       setShowForm(false);
-      load();
+      load(true);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to create product");
     }
@@ -54,7 +66,7 @@ export function Products() {
         quantity: movementQty, movementType: movement.type, reason: movementReason,
       });
       setMovement(null); setMovementQty(1); setMovementReason("");
-      load();
+      load(true);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to record stock movement");
     }
@@ -65,7 +77,7 @@ export function Products() {
     setError("");
     try {
       await api.delete(`/products/${id}`);
-      load();
+      load(true);
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to delete product");
     }
@@ -82,7 +94,7 @@ export function Products() {
         </div>
         <div className="page-header-actions">
           <input className="search-box" style={{ margin: 0 }} placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={load}>
+          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => load()}>
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             Refresh
           </button>
@@ -127,37 +139,42 @@ export function Products() {
         </form>
       )}
 
-      <div className="table-container">
+      {loading && items.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading products…</div>
+      )}
 
-      <table className="data-table">
-        <thead>
-          <tr><th>Name</th><th>SKU</th><th>Category</th><th>Price</th><th>Stock</th><th>Location</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {items.map((p) => (
-            <tr key={p.id}>
-              <td>{p.name}</td>
-              <td>{p.sku}</td>
-              <td>{p.category || "-"}</td>
-              <td>₹{p.unitPrice}</td>
-              <td className={p.currentStock <= p.minStockAlert ? "low-stock" : ""}>
-                {p.currentStock}{p.currentStock <= p.minStockAlert && " ⚠"}
-              </td>
-              <td>{p.location || "-"}</td>
-              <td>
-                <PermissionGuard resource="stockMovements" action="create">
-                  <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "IN" })}>+ In</button>{" "}
-                  <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "OUT" })}>- Out</button>
-                </PermissionGuard>
-                <PermissionGuard resource="products" action="delete">
-                  <button className="btn btn-small" style={{marginLeft: 8, background: '#fee2e2', color: '#b91c1c', border: 'none'}} onClick={() => handleDelete(p.id)}>Delete</button>
-                </PermissionGuard>
-              </td>
-            </tr>
-          ))}
-          {items.length === 0 && <tr><td colSpan={7} className="muted">No products found</td></tr>}
-        </tbody>
-      </table>
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr><th>Name</th><th>SKU</th><th>Category</th><th>Price</th><th>Stock</th><th>Location</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {items.map((p) => (
+              <tr key={p.id}>
+                <td>{p.name}</td>
+                <td>{p.sku}</td>
+                <td>{p.category || "-"}</td>
+                <td>₹{p.unitPrice}</td>
+                <td className={p.currentStock <= p.minStockAlert ? "low-stock" : ""}>
+                  {p.currentStock}{p.currentStock <= p.minStockAlert && " ⚠"}
+                </td>
+                <td>{p.location || "-"}</td>
+                <td>
+                  <PermissionGuard resource="stockMovements" action="create">
+                    <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "IN" })}>+ In</button>{" "}
+                    <button className="btn btn-small" onClick={() => setMovement({ id: p.id, type: "OUT" })}>- Out</button>
+                  </PermissionGuard>
+                  <PermissionGuard resource="products" action="delete">
+                    <button className="btn btn-small" style={{marginLeft: 8, background: '#fee2e2', color: '#b91c1c', border: 'none'}} onClick={() => handleDelete(p.id)}>Delete</button>
+                  </PermissionGuard>
+                </td>
+              </tr>
+            ))}
+            {!loading && items.length === 0 && !error && (
+              <tr><td colSpan={7} className="muted">No products found</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

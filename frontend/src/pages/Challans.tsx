@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { PermissionGuard } from "../components/PermissionGuard";
@@ -7,19 +7,35 @@ export function Challans() {
   const [items, setItems] = useState<any[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const abortRef = useRef<AbortController | null>(null);
 
-  async function load() {
+  async function load(keepExisting = false) {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    if (!keepExisting) setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/challans", { params: { status: status || undefined } });
+      const { data } = await api.get("/challans", {
+        params: { status: status || undefined },
+        signal: abortRef.current.signal,
+      });
       setItems(data.items);
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") return;
+      // DO NOT clear items on error — keep stale data visible
       setError(err.response?.data?.error || err.message || "Failed to load challans");
+    } finally {
+      setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [status]);
+  useEffect(() => {
+    load();
+    return () => { abortRef.current?.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   return (
     <div>
@@ -37,39 +53,42 @@ export function Challans() {
             <option value="CONFIRMED">Confirmed</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
-          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={load}>
+          <button className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => load()}>
             <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             Refresh
           </button>
           <PermissionGuard resource="salesChallans" action="create">
-            <button className="btn btn-primary" onClick={() => navigate("/challans/new")}>
-              + Create Challan
-            </button>
+            <button className="btn btn-primary" onClick={() => navigate("/challans/new")}>+ Create Challan</button>
           </PermissionGuard>
         </div>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="table-container">
+      {loading && items.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading challans…</div>
+      )}
 
-      <table className="data-table">
-        <thead>
-          <tr><th>Challan #</th><th>Customer</th><th>Total Qty</th><th>Status</th><th>Date</th></tr>
-        </thead>
-        <tbody>
-          {items.map((c) => (
-            <tr key={c.id}>
-              <td><Link to={`/challans/${c.id}`}>{c.challanNumber}</Link></td>
-              <td>{c.customer?.businessName || c.customer?.name}</td>
-              <td>{c.totalQuantity}</td>
-              <td><span className={`badge badge-${c.status.toLowerCase()}`}>{c.status}</span></td>
-              <td>{new Date(c.createdAt).toLocaleDateString()}</td>
-            </tr>
-          ))}
-          {items.length === 0 && <tr><td colSpan={5} className="muted">No challans found</td></tr>}
-        </tbody>
-      </table>
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr><th>Challan #</th><th>Customer</th><th>Total Qty</th><th>Status</th><th>Date</th></tr>
+          </thead>
+          <tbody>
+            {items.map((c) => (
+              <tr key={c.id}>
+                <td><Link to={`/challans/${c.id}`}>{c.challanNumber}</Link></td>
+                <td>{c.customer?.businessName || c.customer?.name}</td>
+                <td>{c.totalQuantity}</td>
+                <td><span className={`badge badge-${c.status.toLowerCase()}`}>{c.status}</span></td>
+                <td>{new Date(c.createdAt).toLocaleDateString()}</td>
+              </tr>
+            ))}
+            {!loading && items.length === 0 && !error && (
+              <tr><td colSpan={5} className="muted">No challans found</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
