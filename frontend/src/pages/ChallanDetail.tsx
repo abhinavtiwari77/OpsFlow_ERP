@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -8,6 +9,8 @@ import { usePermission } from "../hooks/usePermission";
 export function ChallanDetail() {
   const { id } = useParams<{ id: string }>();
   const { can } = usePermission();
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const { data: challan, isLoading, isError, error } = useQuery({
     queryKey: KEYS.challanDetail(id!),
@@ -39,9 +42,30 @@ export function ChallanDetail() {
     },
   });
 
+  async function exportPdf() {
+    setIsExporting(true);
+    setExportError("");
+    try {
+      const response = await api.get(`/challans/${id}/pdf`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `sales-challan-${challan.challanNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setExportError(err.response?.data?.error || "Failed to export PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const mutationError =
     (confirmMutation.error as any)?.response?.data?.error ||
     (cancelMutation.error as any)?.response?.data?.error ||
+    exportError ||
     "";
 
   if (isLoading) return <p>Loading…</p>;
@@ -55,8 +79,19 @@ export function ChallanDetail() {
     <div>
       <Link to="/challans" className="back-link">&larr; Back to challans</Link>
       <div className="page-header">
-        <h2>{challan.challanNumber}</h2>
-        <span className={`badge badge-${challan.status.toLowerCase()}`}>{challan.status}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <h2>{challan.challanNumber}</h2>
+          <span className={`badge badge-${challan.status.toLowerCase()}`}>{challan.status}</span>
+        </div>
+        <div>
+          <button
+            className="btn btn-primary"
+            onClick={exportPdf}
+            disabled={isExporting}
+          >
+            {isExporting ? "Generating PDF..." : "Export PDF"}
+          </button>
+        </div>
       </div>
       {mutationError && <div className="error-banner">{mutationError}</div>}
 

@@ -73,6 +73,13 @@ It manages customers, products, inventory, stock movements, and sales challans w
 - Challan statuses: **Draft → Confirmed / Cancelled**
 - Cancelling a confirmed challan restores stock
 
+### 📄 Sales Challan PDF Export
+- Sales Challans can be exported as professional PDFs.
+- PDFs use persisted snapshot data to guarantee historical accuracy regardless of current product prices.
+- PDF generation is protected by authentication and RBAC.
+- PDF generation happens entirely on the backend in memory.
+- The PDF is downloaded directly by the frontend without saving temporary files to disk.
+
 ---
 
 ## Role-Based Access Control

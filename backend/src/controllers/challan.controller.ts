@@ -234,3 +234,107 @@ export async function cancelChallan(req: Request, res: Response) {
 
   res.json(updated);
 }
+
+import PDFDocument from "pdfkit";
+
+// GET /challans/:id/pdf
+// Generates a PDF from a challan's snapshot data and streams it back.
+export async function exportPdf(req: Request, res: Response) {
+  const challan = await prisma.salesChallan.findUnique({
+    where: { id: req.params.id },
+    include: {
+      customer: true,
+      items: true,
+      createdBy: { select: { name: true } },
+    },
+  });
+
+  if (!challan) throw new ApiError(404, "Challan not found");
+
+  const doc = new PDFDocument({ margin: 50 });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="sales-challan-${challan.challanNumber}.pdf"`);
+
+  doc.pipe(res);
+
+  // Header
+  doc.fontSize(20).text("OpsFlow ERP", { align: "left" });
+  doc.fontSize(16).text("SALES CHALLAN", { align: "right" });
+  doc.moveDown();
+
+  doc.fontSize(10);
+  doc.text(`Challan No: ${challan.challanNumber}`);
+  doc.text(`Date: ${new Date(challan.createdAt).toLocaleDateString()}`);
+  doc.text(`Status: ${challan.status}`);
+  doc.text(`Created By: ${challan.createdBy?.name || "-"}`);
+  doc.moveDown(2);
+
+  // Customer Section
+  doc.fontSize(12).text("BILL TO / CUSTOMER", { underline: true });
+  doc.moveDown(0.5);
+  doc.fontSize(10);
+  doc.text(`Name: ${challan.customer.name}`);
+  if (challan.customer.businessName) doc.text(`Business Name: ${challan.customer.businessName}`);
+  doc.text(`Phone: ${challan.customer.mobile}`);
+  if (challan.customer.email) doc.text(`Email: ${challan.customer.email}`);
+  if (challan.customer.address) doc.text(`Address: ${challan.customer.address}`);
+  if (challan.customer.gstNumber) doc.text(`GST: ${challan.customer.gstNumber}`);
+  doc.moveDown(2);
+
+  // Items Table
+  doc.fontSize(12).text("ITEMS", { underline: true });
+  doc.moveDown(0.5);
+  
+  const tableTop = doc.y;
+  const col1 = 50;
+  const col2 = 80;
+  const col3 = 250;
+  const col4 = 350;
+  const col5 = 400;
+  const col6 = 480;
+
+  doc.fontSize(10);
+  doc.font("Helvetica-Bold");
+  doc.text("#", col1, tableTop);
+  doc.text("Product", col2, tableTop);
+  doc.text("SKU", col3, tableTop);
+  doc.text("Qty", col4, tableTop);
+  doc.text("Unit Price", col5, tableTop);
+  doc.text("Total", col6, tableTop);
+  doc.font("Helvetica");
+  
+  doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).stroke();
+  doc.moveDown(1);
+
+  let y = doc.y;
+  let subtotal = 0;
+
+  for (let i = 0; i < challan.items.length; i++) {
+    const item = challan.items[i];
+    const unitPrice = parseFloat(item.unitPriceSnapshot as any);
+    const total = unitPrice * item.quantity;
+    subtotal += total;
+
+    doc.text((i + 1).toString(), col1, y);
+    doc.text(item.productNameSnapshot, col2, y, { width: 160 });
+    doc.text(item.productSkuSnapshot, col3, y, { width: 90 });
+    doc.text(item.quantity.toString(), col4, y);
+    doc.text(`Rs. ${unitPrice.toFixed(2)}`, col5, y);
+    doc.text(`Rs. ${total.toFixed(2)}`, col6, y);
+
+    y += 20;
+  }
+
+  doc.moveTo(50, y + 5).lineTo(550, y + 5).stroke();
+  
+  doc.moveDown(2);
+  doc.y = y + 20;
+  doc.text(`Subtotal: Rs. ${subtotal.toFixed(2)}`, { align: "right" });
+  doc.text(`Grand Total: Rs. ${subtotal.toFixed(2)}`, { align: "right" });
+
+  doc.moveDown(4);
+  doc.text("Prepared By: OpsFlow ERP", 50, doc.y);
+
+  doc.end();
+}
