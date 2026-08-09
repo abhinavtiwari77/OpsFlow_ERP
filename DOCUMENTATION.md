@@ -242,6 +242,7 @@ Unauthorized metrics return `null` (not 0, not an error).
 |---|---|---|---|
 | `GET` | `/challans` | List challans (`?status=`) | `salesChallans:list` |
 | `GET` | `/challans/:id` | Challan detail + line items | `salesChallans:read` |
+| `GET` | `/challans/:id/pdf` | **Export PDF** generated from snapshots | `salesChallans:read` |
 | `POST` | `/challans` | Create challan (DRAFT or CONFIRMED) | `salesChallans:create` |
 | `POST` | `/challans/:id/confirm` | Confirm — atomically reduces stock | `salesChallans:confirm` |
 | `POST` | `/challans/:id/cancel` | Cancel — restores stock if was confirmed | `salesChallans:cancel` |
